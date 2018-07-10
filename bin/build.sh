@@ -16,5 +16,5 @@ pushd $shell_folder
 ./build_opencv.sh;exit_on_error
 ./build_protobuf.sh;exit_on_error
 ./build_snappy.sh;exit_on_error
-./build_ssd.sh;exit_on_error
+./build_intel_caffe.sh;exit_on_error
 popd

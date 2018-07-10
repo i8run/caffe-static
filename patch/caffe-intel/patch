@@ -1,0 +1,519 @@
+diff --git a/CMakeLists.txt b/CMakeLists.txt
+index 803715e4..196a7367 100644
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -60,6 +60,8 @@ if(CODE_COVERAGE)
+ endif()
+ #end code coverage
+ 
++list(APPEND Caffe_LINKER_LIBS ${CMAKE_DL_LIBS} -pthread -lrt)
++
+ # ---[ Flags
+ if(UNIX OR APPLE)
+ 
+@@ -78,15 +80,15 @@ if(UNIX OR APPLE)
+   if( ${CMAKE_CXX_COMPILER_ID} STREQUAL "GNU") 
+     # GCC specific flags.
+     if(CMAKE_CXX_COMPILER_VERSION VERSION_GREATER 4.9 OR CMAKE_CXX_COMPILER_VERSION VERSION_EQUAL 4.9)
+-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIE -fstack-protector-strong")
++      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstack-protector-strong")
+       # auto enable SGD FUSION if gcc version >= 4.9
+       set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -DENABLE_SGD_FUSION")
+     else()
+-      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIE -fstack-protector")
++      set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstack-protector")
+     endif()
+   elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Clang") 
+     # Clang is compatbile with some of the flags.
+-    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fPIE -fstack-protector")
++    set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fstack-protector")
+   elseif(${CMAKE_CXX_COMPILER_ID} STREQUAL "Intel" ) 
+     # Same as above, with exception that ICC compilation crashes with -fPIE option, even 
+     # though it uses -pie linker option that require -fPIE during compilation. Checksec
+@@ -104,7 +106,7 @@ if(UNIX OR APPLE)
+   # Dot not forward c++11 flag to GPU beucause it is not supported
+   set( CUDA_PROPAGATE_HOST_FLAGS OFF )
+   set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -D_FORTIFY_SOURCE=2")
+-  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -pie")
++  set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS}")
+ endif()
+ 
+ caffe_set_caffe_link()
+@@ -130,8 +132,8 @@ include_directories(BEFORE src/gtest/include src/gmock/include) # This is needed
+ # ---[ Subdirectories
+ #add_subdirectory(src/gtest)
+ set(BUILD_SHARED_LIBS off)
+-add_subdirectory(src/gmock)
+-set(BUILD_SHARED_LIBS on)
++#add_subdirectory(src/gmock)
++#set(BUILD_SHARED_LIBS on)
+ add_subdirectory(src/caffe)
+ add_subdirectory(tools)
+ add_subdirectory(examples)
+diff --git a/cmake/Modules/FindGFlags.cmake b/cmake/Modules/FindGFlags.cmake
+index 29b60f05..53e8ceca 100644
+--- a/cmake/Modules/FindGFlags.cmake
++++ b/cmake/Modules/FindGFlags.cmake
+@@ -12,39 +12,46 @@
+ include(FindPackageHandleStandardArgs)
+ 
+ set(GFLAGS_ROOT_DIR "" CACHE PATH "Folder contains Gflags")
+-
+ # We are testing only a couple of files in the include directories
+-if(WIN32)
+-    find_path(GFLAGS_INCLUDE_DIR gflags/gflags.h
+-        PATHS ${GFLAGS_ROOT_DIR}/src/windows)
++# modified by guyadong
++if(GFLAGS_ROOT_DIR)
++	if(WIN32)
++		set (cmake_root ${GFLAGS_ROOT_DIR}/CMake)
++	else()
++		set (cmake_root ${GFLAGS_ROOT_DIR}/lib/cmake/gflags)
++	endif(WIN32)
++	find_package(gflags REQUIRED CONFIG HINTS ${cmake_root})
++	unset(cmake_root)
++	# solved "shlwapi.lib" missing
++	# GFLAGS_LIBRARIES is imported target
++	# gflags-config.cmake will set the variable :GFLAGS_LIBRARIES GFLAGS_INCLUDE_DIR
+ else()
+-    find_path(GFLAGS_INCLUDE_DIR gflags/gflags.h
+-        PATHS ${GFLAGS_ROOT_DIR})
+-endif()
+-
+-if(MSVC)
+-    find_library(GFLAGS_LIBRARY_RELEASE
+-        NAMES libgflags
+-        PATHS ${GFLAGS_ROOT_DIR}
+-        PATH_SUFFIXES Release)
+-
+-    find_library(GFLAGS_LIBRARY_DEBUG
+-        NAMES libgflags-debug
+-        PATHS ${GFLAGS_ROOT_DIR}
+-        PATH_SUFFIXES Debug)
+-
+-    set(GFLAGS_LIBRARY optimized ${GFLAGS_LIBRARY_RELEASE} debug ${GFLAGS_LIBRARY_DEBUG})
+-else()
+-    find_library(GFLAGS_LIBRARY gflags)
+-endif()
+-
+-find_package_handle_standard_args(GFlags DEFAULT_MSG GFLAGS_INCLUDE_DIR GFLAGS_LIBRARY)
+-
++	if(MSVC)
++			find_path(GFLAGS_INCLUDE_DIR gflags/gflags.h
++			    PATHS ${GFLAGS_ROOT_DIR}/include)
++			find_library(GFLAGS_LIBRARY_RELEASE
++	        NAMES gflags gflags_static
++	        PATHS ${GFLAGS_ROOT_DIR}
++	        PATH_SUFFIXES lib)
++	    find_library(GFLAGS_LIBRARY_DEBUG
++	        NAMES gflags gflags_static
++	        PATHS ${GFLAGS_ROOT_DIR}
++	        PATH_SUFFIXES lib)
++			set(GFLAGS_LIBRARIES optimized ${GFLAGS_LIBRARY_RELEASE} debug ${GFLAGS_LIBRARY_DEBUG})
++	else()
++			find_path(GFLAGS_INCLUDE_DIR gflags/gflags.h
++			    PATHS ${GFLAGS_ROOT_DIR}/include
++					NO_DEFAULT_PATH)
++			find_path(GFLAGS_INCLUDE_DIR gflags/gflags.h
++			    PATHS ${GFLAGS_ROOT_DIR}/include)
++	    find_library(GFLAGS_LIBRARIES gflags PATHS ${GFLAGS_ROOT_DIR}/lib)
++	endif(MSVC)
++endif(GFLAGS_ROOT_DIR)
++find_package_handle_standard_args(GFlags DEFAULT_MSG GFLAGS_INCLUDE_DIR GFLAGS_LIBRARIES)
+ 
+ if(GFLAGS_FOUND)
+     set(GFLAGS_INCLUDE_DIRS ${GFLAGS_INCLUDE_DIR})
+-    set(GFLAGS_LIBRARIES ${GFLAGS_LIBRARY})
+-    message(STATUS "Found gflags  (include: ${GFLAGS_INCLUDE_DIR}, library: ${GFLAGS_LIBRARY})")
++    message(STATUS "Found gflags  (include: ${GFLAGS_INCLUDE_DIRS}, library: ${GFLAGS_LIBRARIES})")
+     mark_as_advanced(GFLAGS_LIBRARY_DEBUG GFLAGS_LIBRARY_RELEASE
+                      GFLAGS_LIBRARY GFLAGS_INCLUDE_DIR GFLAGS_ROOT_DIR)
+ endif()
+diff --git a/cmake/Modules/FindGlog.cmake b/cmake/Modules/FindGlog.cmake
+index 99abbe47..aaa2ca11 100644
+--- a/cmake/Modules/FindGlog.cmake
++++ b/cmake/Modules/FindGlog.cmake
+@@ -10,28 +10,37 @@
+ #  GLOG_LIBRARYRARY_DIRS
+ 
+ include(FindPackageHandleStandardArgs)
+-
++# modified by guyadong
+ set(GLOG_ROOT_DIR "" CACHE PATH "Folder contains Google glog")
+-
+-if(WIN32)
+-    find_path(GLOG_INCLUDE_DIR glog/logging.h
+-        PATHS ${GLOG_ROOT_DIR}/src/windows)
+-else()
+-    find_path(GLOG_INCLUDE_DIR glog/logging.h
+-        PATHS ${GLOG_ROOT_DIR})
+-endif()
++find_path(GLOG_INCLUDE_DIR glog/logging.h
++    PATHS ${GLOG_ROOT_DIR}/include
++		NO_DEFAULT_PATH)
++find_path(GLOG_INCLUDE_DIR glog/logging.h
++    PATHS ${GLOG_ROOT_DIR}/include)
+ 
+ if(MSVC)
+-    find_library(GLOG_LIBRARY_RELEASE libglog_static
++    find_library(GLOG_LIBRARY_RELEASE glog glog_static
+         PATHS ${GLOG_ROOT_DIR}
+-        PATH_SUFFIXES Release)
++        PATH_SUFFIXES lib NO_DEFAULT_PATH)
+ 
+-    find_library(GLOG_LIBRARY_DEBUG libglog_static
++    find_library(GLOG_LIBRARY_DEBUG glog glog_static
+         PATHS ${GLOG_ROOT_DIR}
+-        PATH_SUFFIXES Debug)
++        PATH_SUFFIXES lib NO_DEFAULT_PATH)
++
++    find_library(GLOG_LIBRARY_RELEASE glog glog_static
++        PATHS ${GLOG_ROOT_DIR}
++        PATH_SUFFIXES lib)
++
++    find_library(GLOG_LIBRARY_DEBUG glog glog_static
++        PATHS ${GLOG_ROOT_DIR}/lib
++        PATH_SUFFIXES lib)
+ 
+     set(GLOG_LIBRARY optimized ${GLOG_LIBRARY_RELEASE} debug ${GLOG_LIBRARY_DEBUG})
+ else()
++    find_library(GLOG_LIBRARY glog
++        PATHS ${GLOG_ROOT_DIR}
++        PATH_SUFFIXES lib lib64
++				NO_DEFAULT_PATH)
+     find_library(GLOG_LIBRARY glog
+         PATHS ${GLOG_ROOT_DIR}
+         PATH_SUFFIXES lib lib64)
+diff --git a/cmake/Modules/FindLMDB.cmake b/cmake/Modules/FindLMDB.cmake
+index 8a817fd6..a9252018 100644
+--- a/cmake/Modules/FindLMDB.cmake
++++ b/cmake/Modules/FindLMDB.cmake
+@@ -11,9 +11,11 @@
+ # Adapted from FindCWD by:
+ # Copyright 2013 Conrad Steenberg <conrad.steenberg@gmail.com>
+ # Aug 31, 2013
+-
++# added by guyadong 
++find_path(LMDB_INCLUDE_DIR NAMES  lmdb.h PATHS "$ENV{LMDB_DIR}/include" NO_DEFAULT_PATH)
+ find_path(LMDB_INCLUDE_DIR NAMES  lmdb.h PATHS "$ENV{LMDB_DIR}/include")
+-find_library(LMDB_LIBRARIES NAMES lmdb   PATHS "$ENV{LMDB_DIR}/lib" )
++find_library(LMDB_LIBRARIES NAMES ${CMAKE_STATIC_LIBRARY_PREFIX}lmdb${CMAKE_STATIC_LIBRARY_SUFFIX} lmdb   PATHS "$ENV{LMDB_DIR}/lib" NO_DEFAULT_PATH)
++find_library(LMDB_LIBRARIES NAMES ${CMAKE_STATIC_LIBRARY_PREFIX}lmdb${CMAKE_STATIC_LIBRARY_SUFFIX} lmdb   PATHS "$ENV{LMDB_DIR}/lib" )
+ 
+ include(FindPackageHandleStandardArgs)
+ find_package_handle_standard_args(LMDB DEFAULT_MSG LMDB_INCLUDE_DIR LMDB_LIBRARIES)
+diff --git a/cmake/Modules/FindLevelDB.cmake b/cmake/Modules/FindLevelDB.cmake
+index 97f08ac9..be9d70fe 100644
+--- a/cmake/Modules/FindLevelDB.cmake
++++ b/cmake/Modules/FindLevelDB.cmake
+@@ -3,17 +3,20 @@
+ #  LevelDB_INCLUDES  - List of LevelDB includes
+ #  LevelDB_LIBRARIES - List of libraries when using LevelDB.
+ #  LevelDB_FOUND     - True if LevelDB found.
+-
++# modified by guyadong
+ # Look for the header file.
+ find_path(LevelDB_INCLUDE NAMES leveldb/db.h
+-                          PATHS $ENV{LEVELDB_ROOT}/include /opt/local/include /usr/local/include /usr/include
++                          PATHS $ENV{LEVELDB_ROOT}/include
++                          DOC "Path in which the file leveldb/db.h is located." NO_DEFAULT_PATH)
++find_path(LevelDB_INCLUDE NAMES leveldb/db.h
+                           DOC "Path in which the file leveldb/db.h is located." )
+ 
+ # Look for the library.
+-find_library(LevelDB_LIBRARY NAMES leveldb
+-                             PATHS /usr/lib $ENV{LEVELDB_ROOT}/lib
++find_library(LevelDB_LIBRARY NAMES ${CMAKE_STATIC_LIBRARY_PREFIX}leveldb${CMAKE_STATIC_LIBRARY_SUFFIX} leveldb
++                             PATHS $ENV{LEVELDB_ROOT}/lib
++                             DOC "Path to leveldb library." NO_DEFAULT_PATH)
++find_library(LevelDB_LIBRARY NAMES ${CMAKE_STATIC_LIBRARY_PREFIX}leveldb${CMAKE_STATIC_LIBRARY_SUFFIX} leveldb
+                              DOC "Path to leveldb library." )
+-
+ include(FindPackageHandleStandardArgs)
+ find_package_handle_standard_args(LevelDB DEFAULT_MSG LevelDB_INCLUDE LevelDB_LIBRARY)
+ 
+diff --git a/cmake/Modules/FindOpenBLAS.cmake b/cmake/Modules/FindOpenBLAS.cmake
+index a6512ae7..53e57c12 100644
+--- a/cmake/Modules/FindOpenBLAS.cmake
++++ b/cmake/Modules/FindOpenBLAS.cmake
+@@ -1,5 +1,9 @@
+-
+-
++# modified by guyadong
++if (DEFINED ENV{OpenBLAS_HOME})
++	FIND_PACKAGE(OpenBLAS CONFIG PATHS $ENV{OpenBLAS_HOME}/lib/cmake NO_DEFAULT_PATH)
++	SET(OpenBLAS_LIB ${OpenBLAS_LIBRARIES})
++	SET(OpenBLAS_INCLUDE_DIR ${OpenBLAS_INCLUDE_DIRS})
++else()
+ SET(Open_BLAS_INCLUDE_SEARCH_PATHS
+   /usr/include
+   /usr/include/openblas
+@@ -27,9 +31,9 @@ SET(Open_BLAS_LIB_SEARCH_PATHS
+         $ENV{OpenBLAS_HOME}
+         $ENV{OpenBLAS_HOME}/lib
+  )
+-
+ FIND_PATH(OpenBLAS_INCLUDE_DIR NAMES cblas.h PATHS ${Open_BLAS_INCLUDE_SEARCH_PATHS})
+ FIND_LIBRARY(OpenBLAS_LIB NAMES openblas PATHS ${Open_BLAS_LIB_SEARCH_PATHS})
++endif()
+ 
+ SET(OpenBLAS_FOUND ON)
+ 
+diff --git a/cmake/Modules/FindSnappy.cmake b/cmake/Modules/FindSnappy.cmake
+index eff2a864..0b70b27d 100644
+--- a/cmake/Modules/FindSnappy.cmake
++++ b/cmake/Modules/FindSnappy.cmake
+@@ -7,13 +7,17 @@
+ #  SNAPPY_FOUND
+ #  Snappy_INCLUDE_DIR
+ #  Snappy_LIBRARIES
++# modified by guyadong
++find_path(Snappy_INCLUDE_DIR NAMES snappy.h
++                             PATHS ${SNAPPY_ROOT_DIR} ${SNAPPY_ROOT_DIR}/include NO_DEFAULT_PATH)
+ 
++find_library(Snappy_LIBRARIES NAMES snappy
++                              PATHS ${SNAPPY_ROOT_DIR} ${SNAPPY_ROOT_DIR}/lib NO_DEFAULT_PATH)
+ find_path(Snappy_INCLUDE_DIR NAMES snappy.h
+                              PATHS ${SNAPPY_ROOT_DIR} ${SNAPPY_ROOT_DIR}/include)
+ 
+ find_library(Snappy_LIBRARIES NAMES snappy
+                               PATHS ${SNAPPY_ROOT_DIR} ${SNAPPY_ROOT_DIR}/lib)
+-
+ include(FindPackageHandleStandardArgs)
+ find_package_handle_standard_args(Snappy DEFAULT_MSG Snappy_INCLUDE_DIR Snappy_LIBRARIES)
+ 
+diff --git a/mkldnn.commit b/mkldnn.commit
+index ab7cef75..14b80c85 100644
+--- a/mkldnn.commit
++++ b/mkldnn.commit
+@@ -1 +1 @@
+-464c268e544bae26f9b85a2acb9122c766a4c396
++98913b4c1e12f2452988831a4b13bdbee1cf526c
+diff --git a/tools/collect.cpp b/tools/collect.cpp
+new file mode 100644
+index 00000000..ba071fee
+--- /dev/null
++++ b/tools/collect.cpp
+@@ -0,0 +1,222 @@
++/*
++   All modification made by Intel Corporation: © 2016 Intel Corporation
++
++   All contributions by the University of California:
++   Copyright (c) 2014, 2015, The Regents of the University of California
++ (Regents) All rights reserved.
++
++   All other contributions:
++   Copyright (c) 2014, 2015, the respective contributors
++   All rights reserved.
++   For the list of contributors go to
++ https://github.com/BVLC/caffe/blob/master/CONTRIBUTORS.md
++
++
++   Redistribution and use in source and binary forms, with or without
++   modification, are permitted provided that the following conditions are met:
++
++ * Redistributions of source code must retain the above copyright notice,
++ this list of conditions and the following disclaimer.
++ * Redistributions in binary form must reproduce the above copyright
++ notice, this list of conditions and the following disclaimer in the
++ documentation and/or other materials provided with the distribution.
++ * Neither the name of Intel Corporation nor the names of its contributors
++ may be used to endorse or promote products derived from this software
++ without specific prior written permission.
++
++ THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
++ AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
++ IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
++ DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT OWNER OR CONTRIBUTORS BE LIABLE
++ FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
++ DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
++ SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
++ CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
++ OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
++ OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
++ */
++
++#include <gflags/gflags.h>
++#include <glog/logging.h>
++
++#include <boost/algorithm/string.hpp>
++#include <boost/make_shared.hpp>
++
++#include "caffe/caffe.hpp"
++#include "caffe/util/cpu_info.hpp"
++
++// add some options
++DEFINE_string(model, "", "The model definition protocol buffer text file.");
++DEFINE_string(dir, "/tmp/", "Where is the data collected.");
++DEFINE_string(type, "float", "data type float | double");
++DEFINE_bool(single, false, "whether single layer or not");
++DEFINE_string(identity, "", "identity of binary file");
++
++using caffe::Blob;
++using caffe::Caffe;
++using caffe::FillerParameter;
++using caffe::Layer;
++using caffe::Net;
++using caffe::shared_ptr;
++using caffe::string;
++using caffe::UniformFiller;
++using caffe::vector;
++
++template <typename Dtype>
++void writeBinary(const Dtype* data, unsigned int count, std::string name) {
++  std::string suffix = "";
++  if (FLAGS_identity.length() > 0) suffix += "." + FLAGS_identity;
++  suffix += ".bin";
++
++  std::string absName = name + suffix;
++
++  std::ofstream out(absName, std::ios_base::binary);
++  LOG(INFO) << "Writing data to " << absName << "...";
++
++  for (int i = 0; i < count; i++) {
++    out.write((char*)&(data[i]), sizeof(Dtype));
++  }
++  out.close();
++}
++
++template <typename Dtype>
++void collect(std::string dir) {
++  // #ifndef DETERMINISTIC
++  //   LOG(ERROR) << "Recompile caffe with DETERMINISTIC to run collect tool";
++  //   return ;
++  // #endif
++  CHECK_GT(FLAGS_model.size(), 0) << "Need a model definition!";
++
++  Caffe::set_random_seed(0);
++  Net<Dtype> caffe_net(FLAGS_model, caffe::TRAIN);
++  const vector<shared_ptr<Layer<Dtype>>>& layers = caffe_net.layers();
++  const vector<shared_ptr<Blob<Dtype>>>& params = caffe_net.params();
++  const vector<vector<Blob<Dtype>*>>& bottom_vecs = caffe_net.bottom_vecs();
++  const vector<vector<Blob<Dtype>*>>& top_vecs = caffe_net.top_vecs();
++  const vector<vector<bool>>& bottom_need_backward =
++      caffe_net.bottom_need_backward();
++
++  LOG(INFO) << "*** Collect procedure begins ***";
++
++  // set all mutable diff / gradient to 0.
++  for (int i = 0; i < params.size(); i++) {
++    caffe::caffe_set(params[i]->count(), static_cast<Dtype>(0.f),
++                     params[i]->mutable_cpu_diff());
++  }
++
++  // do forward layer by layer
++  for (int i = 0; i < layers.size(); ++i) {
++    layers[i]->Forward(bottom_vecs[i], top_vecs[i]);
++
++    // we replace all splash to underline. ( "/" -> "_" )
++    std::string name = boost::replace_all_copy(
++        std::string("Fwrd_") + layers[i]->layer_param().name(), "/", "_");
++    LOG(INFO) << "Collecting FW Layer[" << i
++              << "]: " << layers[i]->layer_param().name() << " -> "
++              << dir + name;
++
++    writeBinary<Dtype>(top_vecs[i][0]->cpu_data(), top_vecs[i][0]->count(),
++                       dir + name);
++
++    // save all weights and bias...
++    for (int j = 0; j < layers[i]->blobs().size(); j++) {
++      shared_ptr<Blob<Dtype>> param = layers[i]->blobs()[j];
++      if (param) {
++        writeBinary<Dtype>(param->cpu_data(), param->count(),
++                           dir + name + ".Wght." + std::to_string(j));
++      }
++    }
++  }
++
++  // if it's testing single layer, we should random the gradient
++  if (FLAGS_single) {
++    int last = layers.size() - 1;
++
++    Blob<Dtype>* tmp = new Blob<Dtype>();
++
++    FillerParameter filler_param;
++    UniformFiller<Dtype> filler(filler_param);
++
++    for (int i = 0; i < top_vecs[last].size(); i++) {
++      tmp->ReshapeLike(*(top_vecs[last][i]));
++      filler.Fill(tmp);
++      caffe::caffe_copy(tmp->count(), tmp->cpu_data(),
++                        top_vecs[last][i]->mutable_cpu_diff());
++
++      filler.Fill(top_vecs[last][i]);
++    }
++
++    // just only save 1 blob
++    std::string name = boost::replace_all_copy(
++        std::string("Bwrd_") + layers[last]->layer_param().name() + ".loss",
++        "/", "_");
++    writeBinary<Dtype>(top_vecs[last][0]->cpu_diff(),
++                       top_vecs[last][0]->count(), dir + name);
++
++    delete tmp;
++  }
++
++  // do backward layer by layer
++  for (int i = layers.size() - 1; i >= 0; --i) {
++    layers[i]->Backward(top_vecs[i], bottom_need_backward[i], bottom_vecs[i]);
++
++    std::string name = boost::replace_all_copy(
++        std::string("Bwrd_") + layers[i]->layer_param().name(), "/", "_");
++
++    // sometimes, the bottom does not propagate
++    if (bottom_need_backward[i].size() > 0 && bottom_need_backward[i][0]) {
++      LOG(INFO) << "Collecting BW Layer[" << i
++                << "]: " << layers[i]->layer_param().name() << " -> "
++                << dir + name;
++
++      writeBinary<Dtype>(bottom_vecs[i][0]->cpu_diff(),
++                         bottom_vecs[i][0]->count(), dir + name);
++    }
++
++    // write all gradient weight/bias...
++    for (int j = 0; j < layers[i]->blobs().size(); j++) {
++      shared_ptr<Blob<Dtype>> param = layers[i]->blobs()[j];
++      if (param) {
++        writeBinary<Dtype>(param->cpu_diff(), param->count(),
++                           dir + name + ".Grad." + std::to_string(j));
++      }
++    }
++  }
++
++  LOG(INFO) << "*** Collect procedure ends ***";
++}
++
++int main(int argc, char* argv[]) {
++  // Print output to stderr (while still logging).
++  FLAGS_alsologtostderr = 1;
++  // Set version
++  gflags::SetVersionString(AS_STRING(CAFFE_VERSION));
++  // Usage message.
++  gflags::SetUsageMessage(
++      "command line brew\n"
++      "usage: caffe <command> <args>\n\n");
++  // Run tool or show usage.
++
++  caffe::GlobalInit(&argc, &argv);
++
++  // just only cpu mode
++  Caffe::set_mode(Caffe::CPU);
++
++  // TODO remove to `check` method.
++  if (FLAGS_dir.length() <= 0) {
++    LOG(ERROR) << "Where will be the data collected saved?";
++  }
++  if (!boost::algorithm::ends_with(FLAGS_dir, "/")) {
++    FLAGS_dir.append("/");
++  }
++
++  if (FLAGS_type == "float") {
++    collect<float>(FLAGS_dir);
++  } else if (FLAGS_type == "double") {
++    collect<double>(FLAGS_dir);
++  } else {
++    LOG(ERROR) << "Unknown data type";
++  }
++
++  return 0;
++}

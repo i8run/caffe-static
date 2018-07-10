@@ -191,6 +191,29 @@ fetch_ssd_clone(){
 	exit_on_error
 	popd
 }
+
+# git clone方式下载caffe-intel源码
+fetch_intel_clone(){
+	eval $(declare_project_local_vars INTEL_CAFFE)
+	remove_if_exist $SOURCE_ROOT/$folder
+	echo "$prefix代码clone到 $SOURCE_ROOT/$folder 文件夹下"
+	git clone --recursive https://github.com/intel/caffe.git $SOURCE_ROOT/$folder
+	exit_on_error
+
+	# pushd $SOURCE_ROOT/$folder
+	# git checkout abf9651e
+
+	# cd external/mkldnn/src/
+	# exit_on_error
+	# git pull origin master
+	# git checkout 98913b4c1e12f2452988831a4b13bdbee1cf526c
+	# exit_on_error
+	# cd -
+
+	# exit_on_error
+	# popd
+}
+
 # download zip方式下载caffe-ssd源码
 fetch_ssd_zip(){
 	eval $(declare_project_local_vars SSD)
@@ -235,6 +258,16 @@ modify_snappy(){
 	exit_on_error
 }
 ######################################################
+modify_intel(){
+	eval $(declare_project_local_vars INTEL_CAFFE)
+	echo "${FUNCNAME[0]}:(复制修改的补丁文件)copy patch file to $SOURCE_ROOT/$folder"	
+	pushd $SOURCE_ROOT/$folder
+	git apply $PATCH_ROOT/$folder/patch
+	# cp -Pr$VERBOSE_EXTRACT $PATCH_ROOT/$folder/* .
+	exit_on_error 
+	popd
+}
+######################################################
 modify_ssd(){
 	eval $(declare_project_local_vars SSD)
 	echo "${FUNCNAME[0]}:(复制修改的补丁文件)copy patch file to $SOURCE_ROOT/$folder"	
@@ -276,6 +309,7 @@ fetch_lmdb(){ fetch_from_github "lmdb" ; modify_lmdb ; }
 fetch_snappy(){ fetch_from_github "snappy" ; modify_snappy ; }
 fetch_openblas(){ fetch_from_github "OpenBLAS" ; modify_openblas ; }
 fetch_ssd(){ fetch_ssd_zip ; modify_ssd; }
+fetch_intel_caffe(){ fetch_intel_clone ; modify_intel ; }
 fetch_opencv(){ fetch_from_github "opencv" ; }
 fetch_bzip2(){ fetch_bzip2_1_0_5 ; }
 
@@ -298,7 +332,7 @@ EOF
 FORCE_DOWNLOAD_IF_EXIST=0
 # 运行过程中是否显示显示详细的进行步骤 "v" 显示，为空不显示
 VERBOSE_EXTRACT=""
-all_names="cmake protobuf gflags glog leveldb lmdb snappy openblas boost hdf5 opencv bzip2 ssd"
+all_names="cmake protobuf gflags glog leveldb lmdb snappy openblas boost hdf5 opencv bzip2 ssd intel_caffe"
 # 需要fetch的项目列表
 fetch_projects=""	
 # 命令行参数解析
